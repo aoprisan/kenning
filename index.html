@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kenning · teorie instalații electrice</title>
+<meta name="description" content="Curs interactiv structurat pe niveluri, cu animații, calculatoare și test pe fiecare modul.">
+<meta name="theme-color" content="#DDE0DC">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="shell top-in">
+    <div class="brand"><b id="brandName">Kenning</b><span id="brandTag"></span></div>
+    <div class="gauge">
+      <div class="gauge-track"><div class="gauge-fill" id="gaugeFill"></div></div>
+      <div class="gauge-num" id="gaugeNum">0/0</div>
+    </div>
+    <div class="top-actions">
+      <button class="mini" id="btnExam">Test general</button>
+      <button class="mini" id="btnReset">Șterge progresul</button>
+    </div>
+  </div>
+</header>
+
+<div class="shell grid">
+  <nav class="bus" id="nav" aria-label="Module"></nav>
+  <main id="main"></main>
+</div>
+
+<script type="module" src="./dist/main.js"></script>
+</body>
+</html>

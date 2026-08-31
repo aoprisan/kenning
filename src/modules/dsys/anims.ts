@@ -1,6 +1,6 @@
 import type { Anim, Els } from "../../types.js";
 import { rd } from "../../helpers.js";
-import { C_L1, C_L2, C_L3, C_N, C_PE, C_RED, C_GREY } from "../../anim/runtime.js";
+import { C_L1, C_L2, C_L3, C_N, C_PE, C_CU, C_RED, C_GREY } from "../../anim/runtime.js";
 
 /**
  * Distributed-systems animations, keyed by module id; a module without an
@@ -31,6 +31,14 @@ const D2_MSG: [number, number][] = [[1, 2], [3, 4], [6, 7], [8, 9]];
 
 const D2_Y = [52, 100, 148];
 const D2_COL = [C_L1, C_N, C_PE];
+
+/* d3 · the four follower y positions, and the fraction of the round at which
+   each one's acknowledgement lands. Follower i is reachable from the leader
+   when i < up - 1, so the slider counts the leader plus the followers it can
+   still talk to; staggering the acks makes the meter step up rather than
+   jump. */
+const D3_FY = [34, 78, 122, 166];
+const D3_ACK = [0.55, 0.61, 0.67, 0.73];
 
 export const anims: Record<string, Anim<any>> = {
 
@@ -140,4 +148,79 @@ d2:{
   ]);
  }},
 
+/* ---------- d3 · five nodes, one quorum line ---------- */
+d3:{
+ title:"Five nodes, and the line a write has to cross",
+ caption:"The leader replicates every write to the four followers and counts the acknowledgements, itself included. The dashed line is the quorum — three of five, because two majorities of five must share a member. Drag the slider down and watch the meter stop below the line: the write does not fail, does not error, and does not roll back. It simply stops, and stays stopped, because there is no group large enough to be allowed to decide.",
+ controls:[{k:"up",l:"Nodes reachable",min:1,max:5,step:1,v:4,u:" of 5"}],
+ svg:`<svg viewBox="0 0 340 210">
+  <line data-e="lk0" x1="58" y1="100" x2="170" y2="34" stroke="${C_L2}" stroke-width="1.4"/>
+  <line data-e="lk1" x1="58" y1="100" x2="170" y2="78" stroke="${C_L2}" stroke-width="1.4"/>
+  <line data-e="lk2" x1="58" y1="100" x2="170" y2="122" stroke="${C_L2}" stroke-width="1.4"/>
+  <line data-e="lk3" x1="58" y1="100" x2="170" y2="166" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="msg0" r="3.6" cx="58" cy="100" fill="${C_CU}" opacity="0"/>
+  <circle data-e="msg1" r="3.6" cx="58" cy="100" fill="${C_CU}" opacity="0"/>
+  <circle data-e="msg2" r="3.6" cx="58" cy="100" fill="${C_CU}" opacity="0"/>
+  <circle data-e="msg3" r="3.6" cx="58" cy="100" fill="${C_CU}" opacity="0"/>
+  <circle data-e="ldr" cx="58" cy="100" r="14" fill="${C_PE}" stroke="${C_L2}" stroke-width="1.6"/>
+  <text x="58" y="104" font-size="10" fill="${C_GREY}" text-anchor="middle" font-family="IBM Plex Mono">L</text>
+  <circle data-e="nd0" cx="170" cy="34" r="10" fill="${C_PE}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd1" cx="170" cy="78" r="10" fill="${C_PE}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd2" cx="170" cy="122" r="10" fill="${C_PE}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd3" cx="170" cy="166" r="10" fill="${C_GREY}" stroke="${C_L2}" stroke-width="1.4"/>
+  <rect x="250" y="32" width="36" height="150" fill="none" stroke="${C_GREY}" stroke-width="1"/>
+  <rect data-e="bar" x="250" y="122" width="36" height="60" fill="${C_PE}"/>
+  <line x1="248" y1="92" x2="292" y2="92" stroke="${C_L2}" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text x="243" y="95" font-size="8" fill="${C_L2}" text-anchor="end" font-family="IBM Plex Mono">quorum 3 of 5</text>
+  <text data-e="cnt" x="268" y="26" font-size="10" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text x="268" y="194" font-size="8" fill="${C_L3}" text-anchor="middle" font-family="IBM Plex Mono">acks</text>
+  <text data-e="verdict" x="128" y="200" font-size="9.5" fill="${C_PE}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+ </svg>`,
+ draw(t: number, c: { up: number }, E: Els){
+  const up = Math.round(c.up), Q = 3, period = 2.4;
+  const ok = up >= Q;
+  // Healthy: one round every `period`. Stalled: the round advances once and
+  // then pins, because nothing further can happen without a quorum.
+  const p = ok ? (t % period) / period : Math.min(0.78, t / period);
+  const pulse = 0.5 + 0.5 * Math.abs(Math.sin(t * 2.4));
+
+  let acks = 1;                                   // the leader votes for itself
+  for (let i = 0; i < 4; i++) {
+    const live = i < up - 1;
+    if (live && p >= D3_ACK[i]) acks++;
+    E["nd" + i].setAttribute("fill", live ? C_PE : C_GREY);
+    E["lk" + i].setAttribute("stroke", live ? C_L2 : C_GREY);
+    E["lk" + i].setAttribute("stroke-dasharray", live ? "none" : "4 4");
+    E["lk" + i].setAttribute("opacity", live ? "1" : "0.45");
+
+    // out on the first leg, back on the second, parked at the leader after
+    const u = p < 0.4 ? p / 0.4 : p < D3_ACK[i] ? 1 - (p - 0.4) / (D3_ACK[i] - 0.4) : 0;
+    const el = E["msg" + i];
+    el.setAttribute("cx", (58 + (170 - 58) * u).toFixed(1));
+    el.setAttribute("cy", (100 + (D3_FY[i] - 100) * u).toFixed(1));
+    el.setAttribute("opacity", live && p < D3_ACK[i] ? "1" : "0");
+  }
+
+  const h = acks * 30;
+  E.bar.setAttribute("y", String(182 - h));
+  E.bar.setAttribute("height", String(h));
+  E.bar.setAttribute("fill", acks >= Q ? C_PE : C_RED);
+  E.bar.setAttribute("opacity", ok ? "1" : pulse.toFixed(2));
+  E.cnt.textContent = acks + " of 5";
+  E.ldr.setAttribute("fill", ok ? C_PE : C_RED);
+  E.ldr.setAttribute("opacity", ok ? "1" : pulse.toFixed(2));
+
+  E.verdict.textContent = ok
+    ? up + " reachable — quorum met, the write commits"
+    : up + " reachable — no quorum, the write stalls";
+  E.verdict.setAttribute("fill", ok ? C_PE : C_RED);
+
+  E.read.innerHTML = rd([
+    ["Nodes reachable", up + " of 5"],
+    ["Quorum needed", Q + " (⌊5/2⌋ + 1)"],
+    ["Acks this round", acks + " of 5"],
+    ["Tolerates", "f = 2 crashed nodes (n = 2f + 1)"],
+    ["Outcome", ok ? "committed" : "stalled — waiting for a quorum that cannot form"],
+  ]);
+ }},
 };

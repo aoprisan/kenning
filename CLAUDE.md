@@ -22,7 +22,9 @@ collection, not learning.
 - **`localStorage` is touched only by `src/store.ts`.** It falls back to
   memory when storage is unavailable; nothing else may bypass it. Progress
   and interface state live under separate keys, so clearing progress does
-  not reset the menu.
+  not reset the menu. Progress is namespaced per subject
+  (`kenning.progress:<id>`) — module ids are only unique within a subject.
+  `Store.use` binds that namespace and must run before the first read.
 - **`prefers-reduced-motion` is respected.** Animations start paused.
 - **`sw.js` is hand-written and stays at the repo root.** It has to sit at
   the site root to claim the whole scope, and `tsc` emits into `dist/`,
@@ -61,6 +63,7 @@ tests/render.mjs      full jsdom render of every module and tab
 Create `src/modules/<id>/` with `curriculum.ts`, `questions.ts`, `anims.ts`,
 `calcs.ts`, and an `index.ts` exporting a `Subject`. Register it in
 `src/modules/index.ts`. Follow `electro` exactly — it is the reference.
+It then appears in the header's subject picker; nothing else to wire.
 
 ## Animation contract
 

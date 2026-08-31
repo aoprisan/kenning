@@ -1,11 +1,14 @@
 import { Store } from "./store.js";
-import { active } from "./modules/index.js";
+import { SUBJECTS, active, fallback, subjectHref } from "./modules/index.js";
 import { renderAnim, mountAnim } from "./anim/runtime.js";
 import { renderCalc, wireCalc } from "./calc/runtime.js";
 import { startQuiz, renderQuiz, PASS } from "./quiz.js";
 const S = active;
 const ALL = S.levels.flatMap((l) => l.mods);
 const byId = Object.fromEntries(ALL.map((m) => [m.id, m]));
+// Before the first read: scores are per subject, and module ids are only
+// unique within one. `fallback` inherits progress written before the split.
+Store.use(S.id, fallback.id);
 let progress = Store.load();
 let prefs = Store.loadPrefs();
 let current = ALL[0].id;
@@ -274,10 +277,30 @@ function wireDrawer() {
     window.addEventListener("resize", () => { if (!isNarrow())
         closeDrawer(false); });
 }
+/* ---------- subject picker ---------- */
+/**
+ * Lists every registered subject and navigates to the one chosen. A change of
+ * subject reloads the page rather than re-rendering: `active` is resolved once
+ * at import time, and progress, the menu and the quiz are all bound to it.
+ * Progress is written as it is earned, so nothing is lost on the way out.
+ */
+function wireSubjectPick() {
+    const pick = document.getElementById("subjectPick");
+    if (!pick)
+        return;
+    pick.innerHTML = SUBJECTS.map((s) => `<option value="${s.id}"${s.id === S.id ? " selected" : ""}>${s.name}</option>`).join("");
+    pick.value = S.id;
+    pick.onchange = () => {
+        if (pick.value === S.id)
+            return;
+        location.href = subjectHref(pick.value, location.search);
+    };
+}
 /* ---------- global actions ---------- */
 export function wireChrome() {
     document.getElementById("brandName").textContent = "Kenning";
     document.getElementById("brandTag").textContent = S.tagline;
+    wireSubjectPick();
     wireDrawer();
     document.getElementById("btnExam").onclick = () => {
         current = ALL[0].id;

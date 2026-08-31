@@ -89,6 +89,15 @@ reset it. Below 880px the sidebar becomes an off-canvas drawer opened from
 the header, closed by the scrim, Escape, its own close button, or by picking
 a module.
 
+The subject is chosen from the picker beside the wordmark, or by hand with
+`?subject=<id>`; an unknown id falls back to `electro` rather than blanking
+the page. Switching reloads: the subject is resolved once, at import time,
+and the menu, quiz and progress are all bound to it. Scores are stored per
+subject under `kenning.progress:<id>`, so two subjects that happen to share
+a module id keep separate scores, and clearing progress clears only the
+subject on screen. Progress written before those keys were namespaced is
+moved to `electro` the first time it is read.
+
 ## Subjects
 
 | id | status | language |
@@ -98,3 +107,5 @@ a module.
 | `crypto` | 14 modules, 5 animations, 6 calculators, 107 questions | English |
 | `os` | 14 modules, 5 animations, 5 calculators, 114 questions | English |
 | `arch` | 13 modules, 5 animations, 5 calculators, 105 questions | English |
+
+The default is `electro`. Every other subject is one pick away in the header.

@@ -17,4 +17,14 @@ const requested = typeof location !== "undefined" && location.search
     : null;
 /** The subject rendered on load. */
 export const active = SUBJECTS.find((s) => s.id === requested) ?? fallback;
+/**
+ * The URL that opens `id`, keeping every other query parameter intact.
+ * Switching subject is a fresh page load: `active` is resolved once, at
+ * import time, and the whole app is built around it.
+ */
+export function subjectHref(id, search) {
+    const p = new URLSearchParams(search);
+    p.set("subject", id);
+    return "?" + p.toString();
+}
 //# sourceMappingURL=index.js.map

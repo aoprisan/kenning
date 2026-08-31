@@ -29,14 +29,18 @@ in jsdom, answers a quiz to 100%, and checks the progress gauge moves.
 
 ## Deploy
 
-`dist/` is committed and GitHub Pages serves the repo root.
+GitHub Pages is published by Actions. Every push to `main` runs
+`.github/workflows/pages.yml`, which typechecks, builds, runs both test
+suites, then uploads `index.html`, `styles.css`, `.nojekyll` and a freshly
+compiled `dist/` as the Pages artifact and deploys it.
 
 ```bash
-just deploy         # build, test, commit, push
+just deploy         # build, test, commit, push — the push triggers the deploy
 ```
 
-Repository settings → Pages → deploy from branch `main`, folder `/ (root)`.
-The `.nojekyll` file stops Pages filtering anything.
+Repository settings → Pages → Source: **GitHub Actions**. The `.nojekyll` file
+stops Pages filtering anything. `dist/` stays committed so the repo can be
+served straight from a checkout and so `ci.yml` can catch a stale build.
 
 ## Structure
 

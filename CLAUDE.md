@@ -9,7 +9,8 @@ collection, not learning.
 
 - **No bundler, no framework, no runtime dependencies.** TypeScript compiles
   with `tsc` alone to plain ES modules in `dist/`. That is the entire build.
-- **`dist/` is committed.** GitHub Pages serves the repo root. Run
+- **`dist/` is committed.** GitHub Pages is deployed from Actions
+  (`.github/workflows/pages.yml`), but `dist/` still ships in the repo. Run
   `just build` before pushing or CI fails.
 - **Imports carry the `.js` extension** even though the sources are `.ts`
   (`import { rd } from "../../helpers.js"`). `tsc` does not rewrite specifiers.

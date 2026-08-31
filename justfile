@@ -25,7 +25,7 @@ dev: build
     @echo "http://localhost:8080"
     python3 -m http.server 8080
 
-# Rebuild, verify, commit dist, push. Pages serves dist/ from the repo root.
+# Rebuild, verify, commit dist, push. The push triggers the Pages deploy.
 deploy: build test
     git add -A
     git commit -m "build" || true

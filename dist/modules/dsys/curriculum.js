@@ -134,6 +134,77 @@ ${W(`This is not a race that better code avoids. It is the ordering rule itself 
                     "Vector clocks make causality detectable rather than merely respected — at the cost of one entry per process on every message and every stored version.",
                     "Last-write-wins on wall-clock timestamps can discard a write that causally depends on the one it loses to, silently, with a success returned to the client."
                 ] }
+        ] },
+    { name: "Level 1 · Agreement", mods: [
+            { id: "d3", t: "Consensus", calc: null,
+                blurb: "One impossibility result, one counting argument, and two algorithms that are the same algorithm. Most of what looks like folklore here is provable, and most of what is quoted as FLP is not what FLP says.",
+                body: `
+<h3>What consensus has to deliver</h3>
+<p>A set of processes each start with a proposed value and must decide on one. The problem is only interesting because of what "decide" is required to mean:</p>
+${F(`<b>agreement</b>     no two correct processes decide differently
+<b>validity</b>      the decided value was proposed by some process
+                (it cannot be invented by the algorithm)
+<b>termination</b>   every correct process eventually decides`)}
+<p>Drop any one and the problem becomes trivial. Drop agreement and everyone decides their own value; drop validity and everyone decides 0; drop termination and everyone waits forever. The first two are <span class="term-def">safety</span> properties — they say nothing bad happens — and the third is a <span class="term-def">liveness</span> property, saying something good eventually does. Keep that split in view, because the central result is about exactly where the line falls.</p>
+
+<h3>FLP, stated precisely</h3>
+<p>Fischer, Lynch and Paterson proved in 1985 that in an <em>asynchronous</em> message-passing system, where messages are eventually delivered but with no bound on delay and no bound on relative process speed, <em>no deterministic algorithm solves consensus in every execution if even one process may fail by crashing</em>.</p>
+<p>The proof turns on <span class="term-def">bivalence</span>. A configuration is bivalent if both decisions are still reachable from it. FLP show that some initial configuration is bivalent, and that from any bivalent configuration an adversarial scheduler can always deliver messages in an order that reaches another bivalent configuration. It never has to crash anyone: the mere <em>possibility</em> of one crash is what stops the algorithm from ever safely committing to a decision. The result is an infinite execution in which no process ever decides.</p>
+<p>Now the part that is routinely misquoted. FLP does <em>not</em> say:</p>
+<ul>
+<li><span class="term-def">that consensus is impossible in practice.</span> It exhibits one adversarial execution. Real schedulers are not that adversary, and real systems reach agreement constantly.</li>
+<li><span class="term-def">that safety must be given up.</span> Agreement and validity are achievable unconditionally. The casualty is guaranteed termination — which is why every production consensus system is designed to be always safe and eventually live, never the other way round.</li>
+<li><span class="term-def">that no algorithm helps.</span> Three escapes are known, and each weakens exactly one hypothesis. <em>Randomisation</em> (Ben-Or) drops determinism and terminates with probability 1. <em>Partial synchrony</em> (Dwork, Lynch and Stockmeyer, 1988) drops full asynchrony and gives termination after the stabilisation time from module d1. <em>Failure detectors</em> (Chandra and Toueg) add an oracle: the eventually weak detector ◇S is the weakest one with which consensus is solvable, given a majority of correct processes.</li>
+</ul>
+${W(`"FLP says you cannot have consensus" is wrong in a way that matters, because it invites the conclusion that the guarantees are negotiable. The correct reading is narrower and more useful: you cannot bound the time to decide, so do not build anything whose <em>correctness</em> depends on a decision arriving by a deadline. A timeout in a consensus protocol may trigger a new election; it may never conclude a decision.`)}
+
+<h3>Quorums: the counting argument</h3>
+<p>Every algorithm below rests on one property, and it is arithmetic rather than protocol design.</p>
+${F(`if |A| + |B| > n  then  A ∩ B ≠ ∅
+
+majority quorum:   q = ⌊n/2⌋ + 1
+crash tolerance:   n = 2f + 1  tolerates f crashed nodes
+Byzantine:         n = 3f + 1, quorum 2f + 1`)}
+<p>Two majorities of the same set must share at least one member. That shared member is the entire mechanism: it is the node that was present for the earlier decision and is therefore able to tell the later proposer about it. Without intersection, two disjoint groups could each decide, and agreement would be lost — which is precisely what a split-brain is.</p>
+<p>The Byzantine numbers are larger for two compounding reasons: <em>f</em> replies may be lies, and <em>f</em> more may be missing because those nodes are unreachable, so a quorum must be large enough that the honest, present majority still dominates. That is where 3f + 1 comes from, and it is why Byzantine tolerance costs more than a bigger cluster of the same kind.</p>
+<p>Note what a quorum does <em>not</em> require: it does not need to be a majority, only to intersect the quorums it must intersect. That observation is what read and write quorums in module d4 exploit.</p>
+
+<h3>Paxos, by what each phase solves</h3>
+<p>Paxos is usually taught as a sequence of messages, which makes it hard to remember. Taught as two problems it becomes almost obvious. A proposer picks a <span class="term-def">ballot number</span>, unique to it and increasing.</p>
+${F(`Phase 1  prepare(b) → a quorum
+         promise(b, highest accepted proposal) ← quorum
+
+Phase 2  accept(b, v) → a quorum,  where v is the value of the
+         highest-numbered proposal any promise reported,
+         or the proposer's own value if none reported any
+         accepted(b, v) ← quorum   ⇒   v is chosen`)}
+<p><span class="term-def">Phase 1 solves discovery.</span> Before proposing anything, the proposer must find out whether a value may already have been chosen — because if one was, agreement forbids choosing a different one. The promise does two jobs at once: it reports what the acceptor has accepted, and it binds the acceptor to refuse everything below <em>b</em> from now on, which shuts out older proposers that are still in flight.</p>
+<p><span class="term-def">Phase 2 solves commitment</span> — but under a constraint that is the whole safety argument. The proposer is <em>not</em> free to propose its own value if any promise reported an accepted one; it must re-propose the highest-numbered of those. So a proposer that arrives late cannot overwrite a decision it did not witness; the quorum intersection guarantees it heard about it, and the rule forces it to carry that value forward.</p>
+<p>One round of that per decision is two round trips, which is why nobody runs it as stated. <span class="term-def">Multi-Paxos</span> observes that phase 1 is per-<em>ballot</em>, not per-value: elect a stable leader once, and every subsequent command needs only phase 2 — one round trip. The leader is a performance optimisation, not a safety requirement. Paxos is safe with any number of duelling proposers; it merely fails to terminate while they duel, exactly as FLP predicts.</p>
+
+<h3>Raft, by what each phase solves</h3>
+<p>Raft makes the leader structural rather than optional, and names the pieces after what an operator sees. A <span class="term-def">term</span> is a ballot number; at most one leader is elected per term.</p>
+<ul>
+<li><span class="term-def">Election.</span> A follower that hears nothing becomes a candidate and asks for votes; a majority elects it. Randomised election timeouts solve a liveness problem, not a safety one: without them, symmetric candidates split the vote and re-split it, and the cluster livelocks. This is the randomisation escape from FLP, applied at exactly the point that needs it.</li>
+<li><span class="term-def">The election restriction.</span> A voter refuses a candidate whose log is not at least as up to date as its own — compare the last entry's term first, then its index. This is Raft's substitute for Paxos's phase 1: rather than have the new leader collect and re-propose what might have been chosen, Raft simply refuses to elect anyone who is missing it. Quorum intersection is what makes that check sufficient.</li>
+<li><span class="term-def">Log replication.</span> The leader appends a command and replicates it; the consistency check on <em>AppendEntries</em> — the previous entry's index and term must match — forces follower logs to agree with the leader's prefix, and the leader backs up until they do.</li>
+<li><span class="term-def">Commitment.</span> An entry is committed once it is stored on a majority <em>and</em> the leader has committed at least one entry from its own term. That second clause looks arbitrary and is not: without it, a later leader can overwrite an entry that was replicated on a majority under an earlier term but never committed, and agreement breaks.</li>
+</ul>
+<p>Paxos and Raft make the same guarantees and pay the same round trips. They differ in where the complexity sits: Paxos permits any proposer and pushes the difficulty into reconstructing state per decision, Raft forbids all but one and pushes it into the election rules.</p>
+
+<h3>Leader leases, and the clock creeping back in</h3>
+<p>Consensus makes writes safe. Reads are where systems quietly cheat. A read served from the leader's local state is only linearizable if that node is <em>still</em> the leader at the moment it answers — and a leader that has been partitioned away has no way to know it has been replaced.</p>
+<p>The correct fix costs a round trip: confirm leadership with a quorum before answering (the <em>ReadIndex</em> approach). The fast fix is a <span class="term-def">leader lease</span>: followers promise not to elect anyone else before time <em>T</em>, so until <em>T</em> the leader may answer locally. That trades a message round for a clock assumption, and module d2 already said what such an assumption is worth.</p>
+${W(`A lease is only as good as the bound on clock error and on process pauses. A leader that is descheduled — garbage collection, live migration, a saturated host — can wake past its lease still believing it holds it, and serve a stale read while a new leader is already committing writes. Mitigations are to size the lease well inside the election timeout, to re-check a monotonic clock immediately before answering, and to prefer quorum reads wherever the latency can be afforded.`)}`,
+                facts: [
+                    "FLP forbids a deterministic algorithm that terminates in every asynchronous execution with one possible crash. It does not forbid safety, and it does not forbid consensus in practice.",
+                    "Safety first is not a slogan but a design rule: agreement and validity hold unconditionally, termination is what you concede — so nothing's correctness may depend on a decision arriving by a deadline.",
+                    "Two quorums must intersect, and the shared member is the whole mechanism: it is what tells a later proposer about an earlier decision.",
+                    "n = 2f + 1 tolerates f crashes; Byzantine agreement needs n = 3f + 1 with quorums of 2f + 1, because f replies may be lies and f more may be absent.",
+                    "Paxos phase 1 discovers what may already have been chosen and locks out older ballots; phase 2 commits, but is forced to re-propose the highest accepted value it heard about.",
+                    "Raft's election restriction replaces Paxos phase 1: refusing to elect a candidate whose log is behind is equivalent to making the new leader recover what might have been chosen.",
+                    "A leader lease converts a round trip into a clock assumption, so a process pause longer than the lease can produce a stale read from a leader that has already been replaced."
+                ] }
         ] }
 ];
 //# sourceMappingURL=curriculum.js.map

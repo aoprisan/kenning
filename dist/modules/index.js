@@ -2,8 +2,9 @@ import { electro } from "./electro/index.js";
 import { dsys } from "./dsys/index.js";
 import { crypto } from "./crypto/index.js";
 import { os } from "./os/index.js";
+import { arch } from "./arch/index.js";
 /** Every subject the app knows about. Add new ones here. */
-export const SUBJECTS = [electro, dsys, crypto, os];
+export const SUBJECTS = [electro, dsys, crypto, os, arch];
 /** The subject rendered when nothing else is asked for. */
 export const fallback = electro;
 /**

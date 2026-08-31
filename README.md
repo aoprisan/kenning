@@ -97,4 +97,4 @@ a module.
 | `dsys` | 4 modules, 3 animations, 1 calculator, 32 questions | English |
 | `crypto` | 14 modules, 5 animations, 6 calculators, 107 questions | English |
 | `os` | 14 modules, 5 animations, 5 calculators, 114 questions | English |
-| `arch` | planned — computer architecture | English |
+| `arch` | 13 modules, 5 animations, 5 calculators, 105 questions | English |

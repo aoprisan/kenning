@@ -15,10 +15,63 @@ try {
 catch {
     usable = false;
 }
+const get = (k) => {
+    try {
+        return usable ? localStorage.getItem(k) : (mem[k] ?? null);
+    }
+    catch {
+        return mem[k] ?? null;
+    }
+};
+const set = (k, v) => {
+    try {
+        if (usable)
+            localStorage.setItem(k, v);
+        else
+            mem[k] = v;
+    }
+    catch {
+        mem[k] = v;
+    }
+};
+const del = (k) => {
+    try {
+        if (usable)
+            localStorage.removeItem(k);
+    }
+    catch { /* ignore */ }
+    delete mem[k];
+};
+/**
+ * Which subject's progress this store reads and writes. Set by `use`; the
+ * bare key is only ever seen by the migration below.
+ */
+let key = KEY;
 export const Store = {
+    /**
+     * Binds the store to one subject, before anything reads it. Progress lives
+     * under `kenning.progress:<subjectId>`, so two subjects that happen to
+     * share a module id keep separate scores.
+     *
+     * `legacyOwner` names the subject that inherits `kenning.progress`, written
+     * back when the app had one namespace for every subject. The move runs once
+     * and takes the old key with it; a reader who never switched subjects keeps
+     * their scores.
+     */
+    use(subjectId, legacyOwner) {
+        key = KEY + ":" + subjectId;
+        if (subjectId !== legacyOwner)
+            return;
+        const old = get(KEY);
+        if (old == null)
+            return;
+        if (get(key) == null)
+            set(key, old);
+        del(KEY);
+    },
     load() {
         try {
-            const v = usable ? localStorage.getItem(KEY) : mem[KEY];
+            const v = get(key);
             return v == null ? {} : JSON.parse(v);
         }
         catch {
@@ -26,28 +79,14 @@ export const Store = {
         }
     },
     save(p) {
-        try {
-            const s = JSON.stringify(p);
-            if (usable)
-                localStorage.setItem(KEY, s);
-            else
-                mem[KEY] = s;
-        }
-        catch {
-            mem[KEY] = JSON.stringify(p);
-        }
+        set(key, JSON.stringify(p));
     },
     clear() {
-        try {
-            if (usable)
-                localStorage.removeItem(KEY);
-        }
-        catch { /* ignore */ }
-        delete mem[KEY];
+        del(key);
     },
     loadPrefs() {
         try {
-            const v = usable ? localStorage.getItem(UI_KEY) : mem[UI_KEY];
+            const v = get(UI_KEY);
             const p = v == null ? null : JSON.parse(v);
             return { closedLevels: Array.isArray(p?.closedLevels) ? p.closedLevels : [] };
         }
@@ -56,16 +95,7 @@ export const Store = {
         }
     },
     savePrefs(p) {
-        try {
-            const s = JSON.stringify(p);
-            if (usable)
-                localStorage.setItem(UI_KEY, s);
-            else
-                mem[UI_KEY] = s;
-        }
-        catch {
-            mem[UI_KEY] = JSON.stringify(p);
-        }
+        set(UI_KEY, JSON.stringify(p));
     },
 };
 //# sourceMappingURL=store.js.map

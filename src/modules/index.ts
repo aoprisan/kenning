@@ -23,3 +23,14 @@ const requested: string | null =
 
 /** The subject rendered on load. */
 export const active: Subject = SUBJECTS.find((s) => s.id === requested) ?? fallback;
+
+/**
+ * The URL that opens `id`, keeping every other query parameter intact.
+ * Switching subject is a fresh page load: `active` is resolved once, at
+ * import time, and the whole app is built around it.
+ */
+export function subjectHref(id: string, search: string): string {
+  const p = new URLSearchParams(search);
+  p.set("subject", id);
+  return "?" + p.toString();
+}

@@ -150,6 +150,53 @@ try {
   pass(`registry (${ids.join(", ")})`);
 } catch (e) { fail("registry", e); }
 
+/* ---- the picker's URLs select what they claim, and keep the rest of the query ---- */
+try {
+  const { subjectHref } = await import("../dist/modules/index.js");
+  for (const s of SUBJECTS) {
+    const got = new URLSearchParams(subjectHref(s.id, "")).get("subject");
+    if (got !== s.id) throw new Error(`subjectHref("${s.id}") selects "${got}"`);
+  }
+  const swapped = new URLSearchParams(subjectHref("crypto", "?subject=electro&debug=1"));
+  if (swapped.get("subject") !== "crypto") throw new Error("subjectHref does not replace an existing subject");
+  if (swapped.get("debug") !== "1") throw new Error("subjectHref drops other query parameters");
+  pass(`subjectHref (${SUBJECTS.length} subjects)`);
+} catch (e) { fail("subjectHref", e); }
+
+/* ---- progress written before the keys were namespaced reaches its owner ---- */
+try {
+  const bag = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (bag.has(k) ? bag.get(k) : null),
+    setItem: (k, v) => bag.set(k, String(v)),
+    removeItem: (k) => bag.delete(k),
+  };
+  const seed = JSON.stringify({ m1: { seen: true, score: 3, total: 4 } });
+  bag.set("kenning.progress", seed);
+
+  // store.ts probes storage as it loads, so the stub has to be in place first.
+  const { Store } = await import("../dist/store.js");
+
+  // A subject that did not own the old blob must not adopt it.
+  Store.use("crypto", "electro");
+  if (Object.keys(Store.load()).length) throw new Error("a bystander subject inherited the old key");
+  if (bag.get("kenning.progress") !== seed) throw new Error("the old key was consumed by a bystander");
+
+  // The owner takes it, once, and the old key goes with it.
+  Store.use("electro", "electro");
+  if (Store.load().m1?.score !== 3) throw new Error("the owning subject did not inherit its progress");
+  if (bag.get("kenning.progress:electro") !== seed) throw new Error("progress was not filed under the subject");
+  if (bag.has("kenning.progress")) throw new Error("the old key survived the move");
+
+  // Clearing one subject leaves the others alone.
+  Store.save({ m1: { seen: true } });
+  bag.set("kenning.progress:crypto", seed);
+  Store.clear();
+  if (bag.has("kenning.progress:electro")) throw new Error("clear left the active subject's key behind");
+  if (bag.get("kenning.progress:crypto") !== seed) throw new Error("clear reached another subject");
+  pass("progress namespace (migration, isolation, clear)");
+} catch (e) { fail("progress namespace", e); }
+
 console.log(fails
   ? `\n${fails} FAILURE${fails > 1 ? "S" : ""}`
   : `\nALL PASS · ${SUBJECTS.length} subjects, ${moduleCount} modules, ${animCount} animations, ${calcCount} calculators, ${questionCount} questions`);

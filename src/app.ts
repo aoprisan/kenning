@@ -1,6 +1,6 @@
 import type { Module, Question } from "./types.js";
 import { Store, type Progress, type Prefs } from "./store.js";
-import { active } from "./modules/index.js";
+import { SUBJECTS, active, fallback, subjectHref } from "./modules/index.js";
 import { renderAnim, mountAnim, type AnimHandle } from "./anim/runtime.js";
 import { renderCalc, wireCalc } from "./calc/runtime.js";
 import { startQuiz, renderQuiz, PASS, type QuizState } from "./quiz.js";
@@ -10,6 +10,10 @@ type Tab = "teorie" | "vizual" | "calc" | "test";
 const S = active;
 const ALL: Module[] = S.levels.flatMap((l) => l.mods);
 const byId: Record<string, Module> = Object.fromEntries(ALL.map((m) => [m.id, m]));
+
+// Before the first read: scores are per subject, and module ids are only
+// unique within one. `fallback` inherits progress written before the split.
+Store.use(S.id, fallback.id);
 
 let progress: Progress = Store.load();
 let prefs: Prefs = Store.loadPrefs();
@@ -283,11 +287,34 @@ function wireDrawer(): void {
   window.addEventListener("resize", () => { if (!isNarrow()) closeDrawer(false); });
 }
 
+/* ---------- subject picker ---------- */
+/**
+ * Lists every registered subject and navigates to the one chosen. A change of
+ * subject reloads the page rather than re-rendering: `active` is resolved once
+ * at import time, and progress, the menu and the quiz are all bound to it.
+ * Progress is written as it is earned, so nothing is lost on the way out.
+ */
+function wireSubjectPick(): void {
+  const pick = document.getElementById("subjectPick") as HTMLSelectElement | null;
+  if (!pick) return;
+
+  pick.innerHTML = SUBJECTS.map(
+    (s) => `<option value="${s.id}"${s.id === S.id ? " selected" : ""}>${s.name}</option>`,
+  ).join("");
+  pick.value = S.id;
+
+  pick.onchange = () => {
+    if (pick.value === S.id) return;
+    location.href = subjectHref(pick.value, location.search);
+  };
+}
+
 /* ---------- global actions ---------- */
 export function wireChrome(): void {
   document.getElementById("brandName")!.textContent = "Kenning";
   document.getElementById("brandTag")!.textContent = S.tagline;
 
+  wireSubjectPick();
   wireDrawer();
 
   document.getElementById("btnExam")!.onclick = () => {

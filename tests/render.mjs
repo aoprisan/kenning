@@ -114,6 +114,14 @@ check(q(".score-big")?.textContent === "100%", "answering correctly scores 100%"
 check(q("#gaugeNum")?.textContent === `1/${modCount}`, "mastered module advances the gauge");
 check(qa('nav .term[data-state="done"]').length === 1, "terminal switches to done");
 
+/* Scores are filed under the subject, so two subjects sharing a module id
+   cannot overwrite each other. Reaching into storage on purpose: this is the
+   guarantee, and store.ts is the only code allowed to write it. */
+check(window.localStorage.getItem(`kenning.progress:${S.id}`) != null,
+  "progress is stored under the subject's own key");
+check(window.localStorage.getItem("kenning.progress") === null,
+  "nothing is written to the shared pre-namespace key");
+
 q("#btnReset").click();
 check(q("#gaugeNum")?.textContent === `0/${modCount}`, "reset clears progress");
 
@@ -173,6 +181,21 @@ toggle.click();
 qa("nav .term")[1].click();
 check(!window.document.body.classList.contains("nav-open"), "choosing a module closes the drawer");
 check(q("h2.mod")?.textContent === S.levels.flatMap((l) => l.mods)[1].t, "and navigates to it");
+
+/* ---- subject picker ---- */
+const { SUBJECTS: ALL_SUBJECTS, subjectHref } = await import("../dist/modules/index.js");
+const pick = q("#subjectPick");
+check(!!pick, "subject picker exists");
+check(!!pick?.getAttribute("aria-label"), "picker is labelled for screen readers");
+check(qa("#subjectPick option").length === ALL_SUBJECTS.length,
+  `picker lists all ${ALL_SUBJECTS.length} subjects`);
+check(qa("#subjectPick option").every((o, i) => o.value === ALL_SUBJECTS[i].id
+  && o.textContent === ALL_SUBJECTS[i].name), "each option carries a subject id and name");
+check(pick?.value === S.id, "picker opens on the active subject");
+/* The handler navigates, which jsdom cannot do, so verify the destination
+   it would send the browser to rather than firing the change. */
+check(new URLSearchParams(subjectHref(ALL_SUBJECTS.at(-1).id, window.location.search))
+  .get("subject") === ALL_SUBJECTS.at(-1).id, "picking a subject builds its URL");
 
 /* ---- pwa boot is inert where the APIs are missing ---- */
 const { initPWA } = await import("../dist/pwa.js");

@@ -1,9 +1,12 @@
 import type { Subject } from "../types.js";
 import { electro } from "./electro/index.js";
 import { dsys } from "./dsys/index.js";
+import { crypto } from "./crypto/index.js";
+import { os } from "./os/index.js";
+import { arch } from "./arch/index.js";
 
 /** Every subject the app knows about. Add new ones here. */
-export const SUBJECTS: Subject[] = [electro, dsys];
+export const SUBJECTS: Subject[] = [electro, dsys, crypto, os, arch];
 
 /** The subject rendered when nothing else is asked for. */
 export const fallback: Subject = electro;

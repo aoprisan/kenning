@@ -214,6 +214,136 @@ ${W(`A lease is only as good as the bound on clock error and on process pauses. 
  "A leader lease converts a round trip into a clock assumption, so a process pause longer than the lease can produce a stale read from a leader that has already been replaced."
  ]}
 
+]},
+
+{ name:"Level 2 · Replication", mods:[
+
+{id:"d4", t:"Replication", calc:"quorum",
+ blurb:"The only defence against a component failing is another component holding the same data — and the moment there are two copies, the interesting question is what they do when they disagree. Every architecture below is a different answer to that one question.",
+ body:`
+<h3>Three reasons, pulling in different directions</h3>
+<p>Replication is keeping a copy of the same data on more than one machine. It is done for three reasons, and confusing them produces most bad replication designs, because the right architecture is different for each:</p>
+${F(`<b>fault tolerance</b>   the data survives a machine that does not
+<b>throughput</b>        reads can be served by any copy
+<b>latency</b>           a copy can sit near the client`)}
+<p>They conflict. Fault tolerance wants writes acknowledged by several machines before the client is told they succeeded, which costs write latency. Throughput wants reads served by whichever copy is nearest and idlest, which is exactly the copy most likely to be behind. Latency wants copies far apart, which makes them slower to agree.</p>
+<p>And the cost is unavoidable: two copies of a mutable value can differ, so every scheme below has to say who may write, and what happens when two copies disagree. If a design has not answered the second question explicitly, it has answered it implicitly — almost always with last-write-wins, which module d2 showed will silently discard a write that causally depends on the one it loses to.</p>
+
+<h3>Single-leader</h3>
+<p>One replica is designated <span class="term-def">leader</span> and is the only one that accepts writes. It applies each write locally and ships it to the followers, which apply it in the same order. Reads may be served by anyone. This is what PostgreSQL, MySQL, SQL Server, MongoDB and Kafka all do by default, and it is the right default: it makes write conflicts <em>impossible by construction</em>, because there is only one place that orders writes.</p>
+<p>What travels in the replication stream matters more than it looks:</p>
+${F(`statement-based     ship the SQL. Breaks on NOW(), RAND(),
+                    auto-increment and any nondeterminism.
+write-ahead log     ship the storage engine's own log. Exact,
+                    and couples replicas to a storage format,
+                    so upgrades need downtime.
+logical / row-based decoupled from the engine, so mixed versions
+                    and external consumers work. The usual choice.`)}
+<p>The real decision is when the leader answers the client:</p>
+<ul>
+<li><span class="term-def">Synchronous</span> — wait for the follower to confirm. No acknowledged write is lost if the leader dies, and one slow follower stalls every write in the system. Nobody makes all followers synchronous.</li>
+<li><span class="term-def">Asynchronous</span> — answer immediately. Fast, survives any number of dead followers, and <em>acknowledged writes are lost</em> if the leader dies before they ship.</li>
+<li><span class="term-def">Semi-synchronous</span> — exactly one follower synchronous, the rest asynchronous, with promotion if the synchronous one falls behind. This is the usual compromise and it is a real one: it bounds the loss to writes in flight to a single machine.</li>
+</ul>
+<p><span class="term-def">Failover</span> is where single-leader systems actually fail. Promoting a new leader means choosing one, and every part of that is a decision with no safe default. If replication was asynchronous, the new leader is missing writes the old one acknowledged — discarding them violates durability, and keeping them means reconciling with whatever happened since. If the old leader comes back believing it is still leader, there are two, and both accept writes: <span class="term-def">split-brain</span>. And the timeout that declares the leader dead is the same unanswerable question as module d1's failure detector — too short and a garbage-collection pause triggers a needless failover, too long and the outage is long. Systems that get this right do not detect leader failure with a timeout at all; they run the election through consensus (d3), which is what etcd, ZooKeeper and Raft-based databases do.</p>
+
+<h3>Replication lag, and the three anomalies</h3>
+<p>Serve reads from followers and you have bought throughput with staleness. <span class="term-def">Eventual consistency</span> is the honest name for what you get, and it is a statement about the limit — if writes stop, the replicas converge — which says nothing whatever about what a client sees now. In practice three specific anomalies bite, and each has a name and a fix:</p>
+<ul>
+<li><span class="term-def">Read-your-writes.</span> A user posts a comment, the page reloads from a lagging follower, and the comment is gone. They post it again. The fix is not stronger consistency everywhere: route reads of data the user may have modified to the leader, or remember the timestamp of the user's last write and only read from a replica at least that current.</li>
+<li><span class="term-def">Monotonic reads.</span> A user refreshes and sees a comment, refreshes again and it has vanished — because the two reads landed on followers with different lag, and time appeared to run backwards. The fix is to pin each user to one replica, by hashing the user id rather than choosing randomly.</li>
+<li><span class="term-def">Consistent prefix reads.</span> An answer arrives before the question it answers, because the two writes went to different partitions that replicate independently. The fix is to keep causally related writes in the same partition, or to carry the causality explicitly with the version vectors of module d2.</li>
+</ul>
+${W(`These are <em>session</em> guarantees, and they are cheap compared with linearizability — but they are not free and they are not default. A system described as "eventually consistent" provides none of them unless someone implemented them. The failure mode is that the anomaly is rare, non-reproducible, and reported by users as the application being broken, which it is.`)}
+
+<h3>Multi-leader</h3>
+<p>Allow more than one replica to accept writes, each acting as leader for its own writes and follower for everyone else's. It is worth doing for exactly three situations: a deployment across several datacentres, where every write should be local; clients that must work offline, where each device is a leader with a very long replication lag; and real-time collaborative editing, which is the same problem again.</p>
+<p>The benefit is that a write is acknowledged locally and a whole datacentre can go dark without stopping writes elsewhere. The cost is a single sentence, and it is the whole trade: <strong>two leaders can accept conflicting writes to the same record, and something has to resolve them.</strong> Single-leader replication does not have conflicts. Multi-leader replication buys latency and availability with them.</p>
+<p>The options for resolving are ranked by how much data they destroy:</p>
+<ul>
+<li><span class="term-def">Last-write-wins</span> — pick the higher timestamp. Always converges, always loses data, and by d2's argument can lose the causally later write. It is the default in more systems than it should be.</li>
+<li><span class="term-def">Arbitrary but deterministic</span> — highest replica id, say. Converges, loses data, at least does not pretend the clock meant something.</li>
+<li><span class="term-def">Keep both</span> — store siblings and let the application or the user resolve them, which is what the vector clocks of d2 make possible. Correct, and it pushes real work into the application.</li>
+<li><span class="term-def">Make conflicts impossible</span> — a <span class="term-def">CRDT</span>, whose merge is commutative, associative and idempotent, so replicas that have seen the same set of updates in any order agree. Counters, sets, sequences and text all have workable designs. This is the only option that is both automatic and lossless, and it is available only for operations that can be expressed that way.</li>
+</ul>
+<p>Topology matters too. All-to-all replication has a causality hazard: an update can outrun the insert it depends on over a different path, and arrive at a replica that has nothing to apply it to. That is d2's problem again, and it needs d2's answer — version vectors, not timestamps.</p>
+
+<h3>Leaderless, and the quorum arithmetic</h3>
+<p>Drop the leader entirely. The client, or a coordinator acting for it, sends every write to several replicas and reads from several replicas, and the ones that were down simply missed it. This is the Dynamo lineage — Cassandra, Riak, Voldemort — and it is where module d3's closing remark cashes out: a quorum does not have to be a majority, only large enough to intersect the quorums it must intersect.</p>
+${F(`N   replicas holding each value
+W   replicas that must acknowledge a write
+R   replicas that must respond to a read
+
+R + W > N   ⇒  every read set overlaps every write set,
+               so a read reaches at least one replica
+               holding the latest write`)}
+<p>The tunable part is the point. N = 3, W = 2, R = 2 is the common default. W = N with R = 1 gives very fast reads and writes that fail whenever any replica is down. W = 1 with R = N is the reverse. And R + W ≤ N is a legitimate choice — lower latency, higher availability — that gives up the overlap.</p>
+<p>What makes that last case treacherous is that it usually works anyway. A read set that happens to include an up-to-date replica returns the current value, so the configuration looks correct in testing and in production, right up to the read that lands on the wrong replicas. The animation rotates the read set through the ring so you can watch a configuration succeed repeatedly and then fail, with nothing changed.</p>
+<p>Even with R + W > N, the guarantee is weaker than the arithmetic suggests, and the caveats are not footnotes:</p>
+<ul>
+<li><span class="term-def">Sloppy quorums.</span> If the client cannot reach the N home replicas, many systems will accept W acknowledgements from <em>any</em> N reachable nodes and hand the data back later (<span class="term-def">hinted handoff</span>). That is an availability feature, and it voids the overlap argument entirely: the write quorum and the read quorum may now be disjoint sets of machines.</li>
+<li><span class="term-def">Concurrent writes.</span> Two writes at once are a conflict, and the quorum says nothing about how it is resolved — that is the previous section's problem, arriving here too.</li>
+<li><span class="term-def">Partial failure.</span> A write that succeeds on some replicas and fails on others is not rolled back on the ones where it succeeded, so a later read may or may not see it.</li>
+<li><span class="term-def">Replica replacement.</span> If a node holding the new value dies and is rebuilt from one that does not, the number of replicas holding it silently drops below W.</li>
+</ul>
+${W(`R + W > N buys a large reduction in the probability of a stale read. It does not buy linearizability, and leaderless quorum reads are not linearizable in general. If an operation genuinely requires that every reader sees the latest committed value — a uniqueness constraint, a balance check, a lock — it needs consensus (d3), not a quorum parameter.`)}
+
+<h3>Anti-entropy: how replicas catch up</h3>
+<p>Missing a write leaves a replica behind, and something has to notice. Two mechanisms, and both are needed:</p>
+<ul>
+<li><span class="term-def">Read repair.</span> On a read, the coordinator gets several responses, sees one is stale, and writes the newer value back to it. It is free — the data is already in hand — and it only ever fixes data that someone read. Values that are written and rarely read drift indefinitely, which is exactly the data you most want intact.</li>
+<li><span class="term-def">Anti-entropy.</span> A background process compares replicas and copies what is missing, typically by exchanging Merkle trees so that identical subtrees are dismissed with one hash comparison instead of a full scan. It is what covers the cold data read repair never reaches, and it is why a system with only read repair has a durability problem it cannot see.</li>
+</ul>
+
+<h3>CAP, stated correctly</h3>
+<p>Gilbert and Lynch proved Brewer's conjecture in 2002, and the theorem is narrow:</p>
+${F(`In an asynchronous network, when a network partition occurs,
+a system cannot be both linearizable and available —
+where available means every request to a non-failing node
+returns a non-error response.`)}
+<p>Almost everything said about it in practice is wrong, in four specific ways:</p>
+<ul>
+<li>It is <strong>not</strong> "pick two of three". Partitions are not a design choice; they are a property of networks, and they happen. So P is not on the menu, and the theorem reduces to a choice between C and A <em>during a partition</em> — CP or AP, and nothing else.</li>
+<li>The C is <span class="term-def">linearizability</span> specifically — a very strong single-object guarantee — and not the C of ACID, which is about application invariants and is an entirely unrelated word.</li>
+<li>The A is a very strong definition too: <em>every</em> request to <em>every</em> non-failing node must return a non-error response. A system that returns an error for one request in ten thousand is "not available" under CAP and completely fine in practice.</li>
+<li>It says nothing at all about the normal case — the overwhelming majority of a system's operating life, during which there is no partition.</li>
+</ul>
+<p>That last point is the reason to stop using it as a design tool. CAP describes a rare emergency and is silent about the trade-off you actually pay for continuously.</p>
+
+<h3>PACELC, which is the useful version</h3>
+<p>Abadi's 2012 reformulation keeps CAP's case and adds the one that matters daily:</p>
+${F(`if (P)artition:  choose (A)vailability or (C)onsistency
+(E)lse:          choose (L)atency or (C)onsistency`)}
+<p>The else branch is the real content. A linearizable read costs a round trip to a quorum, or a leader confirmation, or a wait on a clock uncertainty bound — <em>always</em>, partition or no partition. That is a cost paid on every single request for the lifetime of the system, whereas the partition trade-off is paid on the rare days a link fails. Any honest comparison of two databases is mostly a comparison of their E branch.</p>
+${F(`Dynamo, Cassandra, Riak   PA/EL  available and fast, stale reads
+BigTable, HBase, etcd      PC/EC  consistent, and pays for it
+MongoDB (default)          PA/EC
+Spanner                    PC/EC  buys consistency with commit
+                                  waits on bounded clock error`)}
+<p>Spanner is the instructive entry, because it shows the price rather than avoiding it: it achieves linearizability across datacentres by waiting out the clock uncertainty interval on every commit — d2's argument accepted rather than dodged — which costs a few milliseconds per transaction and a dedicated network with atomic clocks and GPS receivers to keep that interval small. The consistency was never free; Spanner simply paid in a currency most deployments do not have.</p>
+
+<h3>What to decide, and in what order</h3>
+<ul>
+<li><span class="term-def">What must never be lost?</span> That data needs synchronous replication or consensus, and the write latency that comes with it. Everything else can be asynchronous.</li>
+<li><span class="term-def">What must a user see immediately?</span> Their own writes, almost always. Route those reads to the leader or to a replica known to be current, and leave the rest alone.</li>
+<li><span class="term-def">Where do writes originate?</span> One place is single-leader and has no conflicts. Several places is multi-leader and has conflicts you must design for.</li>
+<li><span class="term-def">What happens when two copies disagree?</span> Answer it explicitly at design time. The default answer is last-write-wins, and the default answer silently loses data.</li>
+</ul>
+<p>Which returns to module d1. Replication exists because a component will fail, and every mechanism in it is a response to silence that cannot be interpreted — a follower that has not acknowledged, a leader that has not been heard from, a replica that missed a write and does not know it.</p>`,
+ facts:[
+ "Replication is done for fault tolerance, throughput or latency, and those three pull in different directions — the right architecture depends on which one you are buying.",
+ "Single-leader replication makes write conflicts impossible by construction, because exactly one node orders writes. That is why it is the right default.",
+ "Asynchronous replication loses acknowledged writes on failover; fully synchronous replication lets one slow follower stall every write. Semi-synchronous is the usual compromise.",
+ "Failover is where single-leader systems fail: lost writes, split-brain, and a timeout that is the same unanswerable question as d1's failure detector. Run the election through consensus instead.",
+ "Eventual consistency is a statement about the limit and says nothing about what a client sees now. Read-your-writes, monotonic reads and consistent prefix reads are separate guarantees that must be implemented.",
+ "Multi-leader replication buys local write latency and availability with write conflicts — the resolution strategy is the design decision, and last-write-wins loses data.",
+ "R + W > N guarantees a read set overlaps every write set, but sloppy quorums, concurrent writes, partial failures and replica rebuilds all void it. Quorum reads are not linearizable.",
+ "R + W ≤ N usually works anyway, which is what makes it dangerous: the configuration looks correct until the read that lands on the wrong replicas.",
+ "Read repair only fixes data someone reads, so anti-entropy is required to stop rarely-read data drifting.",
+ "CAP is not \"pick two of three\": partitions are not a choice, its C is linearizability, its A is stronger than any real availability target, and it says nothing about the non-partitioned case.",
+ "PACELC adds the trade-off that is actually paid continuously: else, latency or consistency. A linearizable read costs a round trip whether or not anything has failed."
+ ]}
+
 ]}
 
 ];

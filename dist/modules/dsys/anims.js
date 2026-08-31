@@ -34,6 +34,11 @@ const D2_COL = [C_L1, C_N, C_PE];
    jump. */
 const D3_FY = [34, 78, 122, 166];
 const D3_ACK = [0.55, 0.61, 0.67, 0.73];
+/* d4 · up to seven replicas on a ring. The write always lands on the first W
+   of them; the read set is a window of R that rotates one position per cycle,
+   so a configuration can be watched succeeding and then failing with nothing
+   changed. That is the point: R + W ≤ N does not fail every time. */
+const D4_MAX = 7;
 export const anims = {
     /* ---------- d2 · wall-clock order against Lamport order ---------- */
     d2: {
@@ -205,6 +210,122 @@ export const anims = {
                 ["Acks this round", acks + " of 5"],
                 ["Tolerates", "f = 2 crashed nodes (n = 2f + 1)"],
                 ["Outcome", ok ? "committed" : "stalled — waiting for a quorum that cannot form"],
+            ]);
+        }
+    },
+    /* ---------- d4 · whether a read set meets the write set ---------- */
+    d4: {
+        title: "R + W, and the read that misses",
+        caption: "Leaderless replication: the write goes to W replicas, then a read asks R of them. The read set rotates one position each round. Set R + W > N and every read set overlaps the write set — no rotation can avoid it, so the fresh value is always found. Drop to R + W ≤ N and watch what makes that configuration dangerous: most rounds still return the new value, and then one lands on replicas that never received it. Nothing changed between the round that worked and the round that did not.",
+        controls: [{ k: "N", l: "Replicas N", min: 3, max: 7, step: 1, v: 5, u: "" },
+            { k: "W", l: "Write quorum W", min: 1, max: 7, step: 1, v: 3, u: "" },
+            { k: "R", l: "Read quorum R", min: 1, max: 7, step: 1, v: 3, u: "" }],
+        svg: `<svg viewBox="0 0 340 216">
+  <text data-e="phase" x="170" y="18" font-size="9" fill="${C_L3}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <circle data-e="rr0" r="15" fill="none" stroke="${C_CU}" stroke-width="2" opacity="0"/>
+  <circle data-e="rr1" r="15" fill="none" stroke="${C_CU}" stroke-width="2" opacity="0"/>
+  <circle data-e="rr2" r="15" fill="none" stroke="${C_CU}" stroke-width="2" opacity="0"/>
+  <circle data-e="rr3" r="15" fill="none" stroke="${C_CU}" stroke-width="2" opacity="0"/>
+  <circle data-e="rr4" r="15" fill="none" stroke="${C_CU}" stroke-width="2" opacity="0"/>
+  <circle data-e="rr5" r="15" fill="none" stroke="${C_CU}" stroke-width="2" opacity="0"/>
+  <circle data-e="rr6" r="15" fill="none" stroke="${C_CU}" stroke-width="2" opacity="0"/>
+  <circle data-e="nd0" r="11" fill="${C_GREY}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd1" r="11" fill="${C_GREY}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd2" r="11" fill="${C_GREY}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd3" r="11" fill="${C_GREY}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd4" r="11" fill="${C_GREY}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd5" r="11" fill="${C_GREY}" stroke="${C_L2}" stroke-width="1.4"/>
+  <circle data-e="nd6" r="11" fill="${C_GREY}" stroke="${C_L2}" stroke-width="1.4"/>
+  <text data-e="vl0" font-size="8" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="vl1" font-size="8" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="vl2" font-size="8" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="vl3" font-size="8" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="vl4" font-size="8" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="vl5" font-size="8" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="vl6" font-size="8" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="sum" x="170" y="170" font-size="9" fill="${C_L2}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="verdict" x="170" y="190" font-size="9.5" text-anchor="middle" font-family="IBM Plex Mono"></text>
+  <text data-e="sub" x="170" y="208" font-size="8.5" fill="${C_L3}" text-anchor="middle" font-family="IBM Plex Mono"></text>
+ </svg>`,
+        draw(t, c, E) {
+            // The sliders move independently, so W and R have to be clamped to N.
+            const N = Math.min(D4_MAX, Math.max(3, Math.round(c.N)));
+            const W = Math.min(N, Math.max(1, Math.round(c.W)));
+            const R = Math.min(N, Math.max(1, Math.round(c.R)));
+            const guaranteed = R + W > N;
+            const period = 3.4;
+            const p = (t % period) / period;
+            const round = Math.floor(t / period);
+            const writing = p < 0.45;
+            const off = round % N; // the read window rotates
+            // Write set is {0 … W−1}; read set is R consecutive replicas from `off`.
+            const inRead = (i) => {
+                for (let k = 0; k < R; k++)
+                    if ((off + k) % N === i)
+                        return true;
+                return false;
+            };
+            let hit = 0;
+            for (let i = 0; i < W; i++)
+                if (inRead(i))
+                    hit++;
+            const fresh = hit > 0;
+            for (let i = 0; i < D4_MAX; i++) {
+                const nd = E["nd" + i], rr = E["rr" + i], vl = E["vl" + i];
+                if (i >= N) {
+                    nd.setAttribute("opacity", "0");
+                    rr.setAttribute("opacity", "0");
+                    vl.setAttribute("opacity", "0");
+                    continue;
+                }
+                // Ring, starting at the top and going clockwise.
+                const ang = -Math.PI / 2 + (2 * Math.PI * i) / N;
+                const x = 170 + 62 * Math.cos(ang), y = 88 + 52 * Math.sin(ang);
+                const written = i < W;
+                // During the write phase the acknowledgements land one by one.
+                const landed = written && (!writing || p / 0.45 > (i + 0.5) / W);
+                const reading = !writing && inRead(i);
+                nd.setAttribute("opacity", "1");
+                nd.setAttribute("cx", x.toFixed(1));
+                nd.setAttribute("cy", y.toFixed(1));
+                nd.setAttribute("fill", landed ? C_PE : C_GREY);
+                rr.setAttribute("cx", x.toFixed(1));
+                rr.setAttribute("cy", y.toFixed(1));
+                rr.setAttribute("opacity", reading ? "1" : "0");
+                rr.setAttribute("stroke", reading && landed ? C_PE : C_CU);
+                vl.setAttribute("opacity", "1");
+                vl.setAttribute("x", x.toFixed(1));
+                vl.setAttribute("y", (y + 25).toFixed(1));
+                vl.textContent = landed ? "v2" : "v1";
+                vl.setAttribute("fill", landed ? C_PE : C_L3);
+            }
+            E.phase.textContent = writing
+                ? "write → " + W + " of " + N + " replicas"
+                : "read ← " + R + " of " + N + " replicas, round " + (round + 1);
+            E.sum.textContent = "R + W = " + (R + W) + (guaranteed ? " > " : " ≤ ") + "N = " + N;
+            E.sum.setAttribute("fill", guaranteed ? C_PE : C_RED);
+            if (writing) {
+                E.verdict.textContent = "replicating the new value";
+                E.verdict.setAttribute("fill", C_L3);
+                E.sub.textContent = "the other " + (N - W) + " never hear about it";
+            }
+            else {
+                E.verdict.textContent = fresh
+                    ? "read met " + hit + " up-to-date replica" + (hit > 1 ? "s" : "") + " — returns v2"
+                    : "read met none of the write set — returns v1, stale";
+                E.verdict.setAttribute("fill", fresh ? C_PE : C_RED);
+                E.sub.textContent = guaranteed
+                    ? "and no rotation of the read set can avoid it"
+                    : fresh ? "this round happened to overlap; the next may not" : "nothing changed but which replicas answered";
+            }
+            E.read.innerHTML = rd([
+                ["Replicas N", String(N)],
+                ["Write quorum W", String(W)],
+                ["Read quorum R", String(R)],
+                ["Overlap guaranteed", guaranteed ? "yes — R + W > N" : "no — R + W ≤ N"],
+                ["This read overlapped", hit + " of " + W + " written replicas"],
+                ["Value returned", writing ? "—" : fresh ? "v2, the latest write" : "v1, stale"],
+                ["Failures tolerated", "writes " + (N - W) + ", reads " + (N - R)],
             ]);
         }
     },

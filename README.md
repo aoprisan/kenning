@@ -94,7 +94,7 @@ a module.
 | id | status | language |
 |---|---|---|
 | `electro` | 17 modules, 10 animations, 8 calculators, 72 questions | Romanian |
-| `dsys` | planned — distributed systems | English |
+| `dsys` | 4 modules, 3 animations, 1 calculator, 32 questions | English |
 | `crypto` | 14 modules, 5 animations, 6 calculators, 107 questions | English |
 | `os` | planned — operating systems | English |
 | `arch` | planned — computer architecture | English |

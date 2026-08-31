@@ -96,5 +96,5 @@ a module.
 | `electro` | 17 modules, 10 animations, 8 calculators, 72 questions | Romanian |
 | `dsys` | 4 modules, 3 animations, 1 calculator, 32 questions | English |
 | `crypto` | 14 modules, 5 animations, 6 calculators, 107 questions | English |
-| `os` | planned — operating systems | English |
+| `os` | 14 modules, 5 animations, 5 calculators, 114 questions | English |
 | `arch` | planned — computer architecture | English |

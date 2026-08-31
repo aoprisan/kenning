@@ -103,6 +103,44 @@ for (const S of SUBJECTS) {
   } catch (e) { fail(`content ${S.id}`, e); }
 }
 
+/* ---- pwa assets: manifest, icons, and the shell the worker precaches ---- */
+try {
+  const { readFileSync, existsSync } = await import("node:fs");
+
+  const man = JSON.parse(readFileSync("manifest.webmanifest", "utf8"));
+  for (const k of ["name", "short_name", "start_url", "scope", "display", "icons"]) {
+    if (!man[k]) throw new Error(`manifest is missing "${k}"`);
+  }
+  if (man.display !== "standalone") throw new Error(`manifest display is "${man.display}"`);
+  for (const i of man.icons) {
+    const f = i.src.replace(/^\.\//, "");
+    if (!existsSync(f)) throw new Error(`manifest icon "${i.src}" does not exist`);
+  }
+  const sizes = man.icons.map((i) => i.sizes);
+  for (const need of ["192x192", "512x512"]) {
+    if (!sizes.includes(need)) throw new Error(`manifest has no ${need} icon`);
+  }
+  if (!man.icons.some((i) => i.purpose === "maskable")) throw new Error("manifest has no maskable icon");
+
+  const html = readFileSync("index.html", "utf8");
+  if (!html.includes('rel="manifest"')) throw new Error("index.html does not link the manifest");
+  if (!html.includes('rel="apple-touch-icon"')) throw new Error("index.html has no apple-touch-icon");
+
+  // Every path the service worker precaches must exist, or install half-fails
+  // and the app is not actually offline-ready.
+  const sw = readFileSync("sw.js", "utf8");
+  new Function(sw); // syntax check
+  const block = sw.match(/const SHELL_URLS = \[([\s\S]*?)\];/);
+  if (!block) throw new Error("sw.js has no SHELL_URLS list");
+  const urls = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  if (!urls.length) throw new Error("sw.js precaches nothing");
+  for (const u of urls) {
+    const f = u === "./" ? "index.html" : u.replace(/^\.\//, "");
+    if (!existsSync(f)) throw new Error(`sw.js precaches "${u}", which does not exist`);
+  }
+  pass(`pwa (${man.icons.length} icons, ${urls.length} precached)`);
+} catch (e) { fail("pwa", e); }
+
 /* ---- subject ids are unique and the default is registered ---- */
 try {
   const ids = SUBJECTS.map((s) => s.id);

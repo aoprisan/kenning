@@ -95,6 +95,6 @@ a module.
 |---|---|---|
 | `electro` | 17 modules, 10 animations, 8 calculators, 72 questions | Romanian |
 | `dsys` | planned — distributed systems | English |
-| `crypto` | planned — cryptography, break-it exercises | English |
+| `crypto` | 14 modules, 5 animations, 6 calculators, 107 questions | English |
 | `os` | planned — operating systems | English |
 | `arch` | planned — computer architecture | English |

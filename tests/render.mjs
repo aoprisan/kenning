@@ -117,6 +117,70 @@ check(qa('nav .term[data-state="done"]').length === 1, "terminal switches to don
 q("#btnReset").click();
 check(q("#gaugeNum")?.textContent === `0/${modCount}`, "reset clears progress");
 
+/* ---- collapsible menu ---- */
+const lvlCount = S.levels.length;
+check(qa("nav .lvl-btn").length === lvlCount, `menu renders ${lvlCount} collapsible levels`);
+check(qa("nav .lvl-btn").every((b) => b.getAttribute("aria-expanded") === "true"),
+  "levels start expanded");
+check(qa("nav .lvl-btn").every((b, i) => {
+  const rail = q(`#rail-${i}`);
+  return rail && b.getAttribute("aria-controls") === rail.id;
+}), "each level header controls its own rail");
+
+const first = () => qa("nav .lvl-btn")[0];
+const firstRail = () => q("#rail-0");
+const inLevel0 = S.levels[0].mods.length;
+
+first().click();
+check(first().getAttribute("aria-expanded") === "false", "clicking a level collapses it");
+check(firstRail().hidden === true, "collapsed rail is hidden from tab order");
+check(qa("nav .term").length === modCount, "collapsing keeps every module in the DOM");
+check(qa("#rail-0 .term").length === inLevel0, "collapsed rail keeps its own modules");
+
+/* Collapse survives a re-render driven by something else entirely. */
+app.renderAll();
+check(first().getAttribute("aria-expanded") === "false", "collapse survives a re-render");
+
+first().click();
+check(first().getAttribute("aria-expanded") === "true", "clicking again expands it");
+check(firstRail().hidden === false, "expanded rail is visible");
+
+/* Per-level progress counter. */
+check(/^\d+\/\d+$/.test(q("nav .lvl-count")?.textContent ?? ""), "level shows a done/total count");
+check(q("nav .lvl-count")?.textContent === `0/${inLevel0}`, "count is empty after a reset");
+
+/* ---- drawer ---- */
+const toggle = q("#navToggle");
+check(!!toggle, "menu toggle exists");
+check(toggle.getAttribute("aria-controls") === "nav", "toggle points at the nav");
+check(toggle.getAttribute("aria-expanded") === "false", "drawer starts closed");
+check(q("#navScrim")?.hidden === true, "scrim starts hidden");
+
+toggle.click();
+check(window.document.body.classList.contains("nav-open"), "toggle opens the drawer");
+check(toggle.getAttribute("aria-expanded") === "true", "open drawer is announced");
+check(q("#navScrim").hidden === false, "scrim appears with the drawer");
+
+window.document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+check(!window.document.body.classList.contains("nav-open"), "Escape closes the drawer");
+check(q("#navScrim").hidden === true, "scrim goes away again");
+
+toggle.click();
+q("#navClose").click();
+check(!window.document.body.classList.contains("nav-open"), "in-drawer close button closes it");
+
+toggle.click();
+qa("nav .term")[1].click();
+check(!window.document.body.classList.contains("nav-open"), "choosing a module closes the drawer");
+check(q("h2.mod")?.textContent === S.levels.flatMap((l) => l.mods)[1].t, "and navigates to it");
+
+/* ---- pwa boot is inert where the APIs are missing ---- */
+const { initPWA } = await import("../dist/pwa.js");
+let threw = null;
+try { initPWA(); } catch (e) { threw = e; }
+check(threw === null, `initPWA is a no-op without a service worker${threw ? ` (${threw.message})` : ""}`);
+check(q("#btnInstall")?.hidden === true, "install button stays hidden until prompted");
+
 console.log(fails
   ? `  ${fails} RENDER FAILURE${fails > 1 ? "S" : ""} in ${S.id}`
   : `  ${S.id} pass · ${views} tab views exercised`);

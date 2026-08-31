@@ -1,0 +1,21 @@
+{
+  "id": "kenning",
+  "name": "Kenning · teorie instalații electrice",
+  "short_name": "Kenning",
+  "description": "Curs interactiv structurat pe niveluri, cu animații, calculatoare și test pe fiecare modul.",
+  "lang": "ro",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#DDE0DC",
+  "theme_color": "#DDE0DC",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

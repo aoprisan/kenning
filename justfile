@@ -20,6 +20,10 @@ render: build
 
 test: smoke render
 
+# Regenerate the PWA icon set from tools/icons.mjs. Output is committed.
+icons:
+    node tools/icons.mjs
+
 # Serve locally. ES modules need http://, file:// will not work.
 dev: build
     @echo "http://localhost:8080"

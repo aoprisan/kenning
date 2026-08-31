@@ -36,7 +36,18 @@ header.top{
   box-shadow:inset 0 1px 2px rgba(0,0,0,.16)}
 .gauge-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--copper),var(--copper-light));transition:width .5s cubic-bezier(.2,.7,.3,1)}
 .gauge-num{font-family:var(--mono);font-size:.8rem;font-variant-numeric:tabular-nums;color:var(--ink-soft)}
-.top-actions{display:flex;gap:6px}
+.top-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Hamburger. Only exists once the sidebar becomes a drawer. */
+.navtoggle{display:none;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--rule);border-radius:2px;
+  padding:6px 11px;font-size:.78rem;color:var(--ink-soft)}
+.navtoggle:hover{border-color:var(--copper);color:var(--copper-dark)}
+.navtoggle-t{font-family:var(--mono);font-size:.72rem;letter-spacing:.02em}
+.bars{position:relative;width:14px;height:2px;background:currentColor;flex:0 0 auto}
+.bars::before,.bars::after{content:"";position:absolute;left:0;width:14px;height:2px;background:currentColor}
+.bars::before{top:-5px}
+.bars::after{top:5px}
 .mini{
   background:var(--surface);border:1px solid var(--rule);border-radius:2px;
   padding:5px 10px;font-size:.78rem;color:var(--ink-soft);
@@ -50,14 +61,33 @@ header.top{
 
 /* ---------- busbar nav ---------- */
 nav.bus{position:sticky;top:62px;padding:22px 0 40px;max-height:calc(100vh - 62px);overflow-y:auto}
-@media(max-width:880px){
-  nav.bus{position:static;max-height:none;padding:14px 0 4px;border-bottom:1px solid var(--rule)}
-}
+.scrim{display:none}
 .lvl{margin-bottom:4px}
-.lvl-hd{
-  font-family:var(--mono);font-size:.68rem;color:var(--ink-faint);
-  padding:14px 0 6px 30px;letter-spacing:.02em;
+.lvl-hd{margin:0;font-weight:inherit}
+.lvl-btn{
+  display:flex;align-items:center;gap:9px;width:100%;
+  background:none;border:0;border-radius:2px;text-align:left;
+  padding:13px 8px 6px 11px;
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.02em;color:var(--ink-faint);
 }
+.lvl-btn:hover{background:var(--surface-2);color:var(--copper-dark)}
+.lvl-name{flex:1 1 auto;min-width:0}
+.lvl-count{flex:0 0 auto;font-variant-numeric:tabular-nums;opacity:.75}
+/* Border triangle: points right when collapsed, down when open. */
+.chev{
+  flex:0 0 auto;width:0;height:0;
+  border-left:5px solid currentColor;border-top:4px solid transparent;border-bottom:4px solid transparent;
+  transition:transform .18s cubic-bezier(.2,.7,.3,1);
+}
+.lvl-btn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+
+/* Drawer-only header. Hidden while the nav is a static sidebar. */
+.nav-hd{display:none;align-items:center;justify-content:space-between;gap:12px;
+  padding:0 4px 12px;margin-bottom:6px;border-bottom:1px solid var(--rule)}
+.nav-hd span{font-family:var(--mono);font-size:.72rem;color:var(--ink-faint);letter-spacing:.02em}
+.navclose{background:none;border:1px solid var(--rule);border-radius:2px;
+  padding:3px 9px;font-size:.8rem;color:var(--ink-soft);line-height:1.4}
+.navclose:hover{border-color:var(--copper);color:var(--copper-dark)}
 .rail{position:relative;padding-left:30px}
 .rail::before{
   content:"";position:absolute;left:11px;top:-4px;bottom:-4px;width:7px;
@@ -84,6 +114,42 @@ nav.bus{position:sticky;top:62px;padding:22px 0 40px;max-height:calc(100vh - 62p
   background:repeating-linear-gradient(45deg,var(--pe-g) 0 3px,var(--pe-y) 3px 6px);
 }
 .term-n{font-family:var(--mono);font-size:.7rem;color:var(--ink-faint);flex:0 0 auto;margin-top:1px}
+
+/* ---------- nav as an off-canvas drawer ----------
+   Placed after the rules above so it overrides them on ordering alone. */
+@media(max-width:880px){
+  .navtoggle{display:inline-flex}
+  .nav-hd{display:flex}
+
+  .scrim{display:block;position:fixed;inset:0;z-index:38;background:rgba(24,27,24,.42)}
+  .scrim[hidden]{display:none}
+
+  nav.bus{
+    position:fixed;top:0;left:0;bottom:0;z-index:40;
+    width:min(320px,86vw);max-height:none;overflow-y:auto;
+    background:var(--panel);border-right:1px solid var(--rule);
+    padding:16px 14px calc(28px + env(safe-area-inset-bottom));
+    padding-left:calc(14px + env(safe-area-inset-left));
+    transform:translateX(-100%);visibility:hidden;
+    /* visibility keeps the closed drawer out of the tab order. It must flip
+       back only after the slide out, but immediately on the way in — a plain
+       transition would delay it and swallow the focus move. */
+    transition:transform .22s cubic-bezier(.2,.7,.3,1),visibility 0s linear .22s;
+  }
+  body.nav-open nav.bus{
+    transform:none;visibility:visible;
+    transition:transform .22s cubic-bezier(.2,.7,.3,1),visibility 0s;
+    box-shadow:6px 0 26px rgba(24,27,24,.22);
+  }
+  /* Stop the page behind the drawer scrolling with it. */
+  body.nav-open{overflow:hidden}
+}
+
+@media(max-width:560px){
+  .brand span{display:none}
+  .navtoggle-t{display:none}
+  .navtoggle{padding:7px 10px}
+}
 
 /* ---------- main ---------- */
 main{padding:26px 0 80px;min-width:0}
@@ -209,4 +275,23 @@ h2.mod{font-size:clamp(1.5rem,4.2vw,2.05rem);letter-spacing:-.025em;margin-botto
 .empty{color:var(--ink-soft);max-width:60ch}
 .foot{border-top:1px solid var(--rule);margin-top:44px;padding-top:16px;font-size:.79rem;color:var(--ink-faint);max-width:70ch}
 .foot p{margin-bottom:.5em}
+/* ---------- pwa notices ---------- */
+.toast{
+  position:fixed;z-index:50;left:16px;right:16px;
+  bottom:calc(16px + env(safe-area-inset-bottom));
+  max-width:520px;margin:0 auto;
+  display:flex;align-items:center;gap:12px;
+  background:var(--ink);color:var(--surface);
+  border-radius:2px;padding:11px 12px 11px 15px;font-size:.87rem;
+  box-shadow:0 6px 20px rgba(24,27,24,.28);
+}
+.toast span{flex:1 1 auto}
+.toast-go{
+  flex:0 0 auto;background:var(--copper);color:#fff;border:0;border-radius:2px;
+  padding:6px 13px;font-size:.82rem;font-weight:500;
+}
+.toast-go:hover{background:var(--copper-light)}
+.toast-x{flex:0 0 auto;background:none;border:0;color:var(--ink-faint);padding:2px 4px;font-size:.85rem}
+.toast-x:hover{color:var(--surface)}
+
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

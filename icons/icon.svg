@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Kenning">
+  <title>Kenning</title>
+  <rect width="512" height="512" rx="113" fill="#DDE0DC"/>
+  <g transform="translate(35.8 35.8) scale(0.86)">
+    <path d="M226 189h-42v-24h42z M226 316h-42v-24h42z M226 439h-42v-24h42z" fill="none"/>
+    <g fill="#8A5324">
+      <rect x="204" y="122" width="82" height="23"/>
+      <rect x="204" y="245" width="82" height="23"/>
+      <rect x="204" y="367" width="82" height="23"/>
+    </g>
+    <rect x="138" y="61" width="67" height="389" rx="10" fill="#B87333"/>
+    <rect x="145" y="61" width="30" height="389" fill="#D89A5E"/>
+    <g fill="#181B18">
+      <rect x="286" y="90" width="87" height="87" rx="10"/>
+      <rect x="286" y="213" width="87" height="87" rx="10"/>
+      <rect x="286" y="335" width="87" height="87" rx="10"/>
+    </g>
+  </g>
+</svg>

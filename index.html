@@ -6,21 +6,37 @@
 <title>Kenning · teorie instalații electrice</title>
 <meta name="description" content="Curs interactiv structurat pe niveluri, cu animații, calculatoare și test pe fiecare modul.">
 <meta name="theme-color" content="#DDE0DC">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kenning">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Loaded without blocking first paint: an installed app must still open when
+     the font CDN is slow or unreachable. The :root stacks fall back to system UI. -->
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
 <header class="top">
   <div class="shell top-in">
+    <button class="navtoggle" id="navToggle" aria-controls="nav" aria-expanded="false" aria-label="Deschide meniul">
+      <span class="bars" aria-hidden="true"></span>
+      <span class="navtoggle-t">Module</span>
+    </button>
     <div class="brand"><b id="brandName">Kenning</b><span id="brandTag"></span></div>
     <div class="gauge">
       <div class="gauge-track"><div class="gauge-fill" id="gaugeFill"></div></div>
       <div class="gauge-num" id="gaugeNum">0/0</div>
     </div>
     <div class="top-actions">
+      <button class="mini" id="btnInstall" hidden>Instalează</button>
       <button class="mini" id="btnExam">Test general</button>
       <button class="mini" id="btnReset">Șterge progresul</button>
     </div>
@@ -28,6 +44,7 @@
 </header>
 
 <div class="shell grid">
+  <div class="scrim" id="navScrim" hidden></div>
   <nav class="bus" id="nav" aria-label="Module"></nav>
   <main id="main"></main>
 </div>
